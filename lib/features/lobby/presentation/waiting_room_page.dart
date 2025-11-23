@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import '../state/lobby_controller.dart';
 import '../../../core/models/room_summary_dto.dart';
@@ -28,12 +29,14 @@ class _WaitingRoomPageState extends State<WaitingRoomPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final gameCtrl = Provider.of<GameController>(context, listen: false);
       final r = await ctrl.getRoomById(widget.roomId);
+      try { developer.log('WaitingRoom init for room=${widget.roomId} fetchedRoom=${r?.toString() ?? '<null>'}', name: 'WaitingRoomPage'); } catch (_) {}
 
       // If the room is already in-game, attempt to enter the active game directly
       try {
         if (r != null && r.status != null && r.status!.toLowerCase().contains('ingame')) {
           // Prefer explicit gameId when provided by the server
           final gid = r.gameId;
+          try { developer.log('Room status=ingame detected for room=${widget.roomId} gameId=$gid', name: 'WaitingRoomPage'); } catch (_) {}
           if (gid != null && gid.isNotEmpty) {
             final ok = await gameCtrl.loadGame(gid);
             if (ok && gameCtrl.game != null) {
@@ -76,11 +79,13 @@ class _WaitingRoomPageState extends State<WaitingRoomPage> {
           final lobby = Provider.of<LobbyController>(context, listen: false);
           final refreshed = await lobby.getRoomById(widget.roomId);
           if (refreshed != null) {
+            try { developer.log('Watcher refreshed room=${widget.roomId} status=${refreshed.status} gameId=${refreshed.gameId} players=${refreshed.playerNames}', name: 'WaitingRoomPage'); } catch (_) {}
             // If the room has an explicit game id or status changed to in-game,
             // try to load the game by id first (preferred), otherwise probe
             // using loadGameByRoom as a fallback.
             final gid = refreshed.gameId;
             if (gid != null && gid.isNotEmpty) {
+              try { developer.log('Watcher attempting to load game by id=$gid', name: 'WaitingRoomPage'); } catch (_) {}
               final ok = await gameCtrl.loadGame(gid);
               if (ok && gameCtrl.game != null) {
                 // Wait briefly for players to be present; sometimes the
@@ -91,45 +96,49 @@ class _WaitingRoomPageState extends State<WaitingRoomPage> {
                   await Future.delayed(const Duration(milliseconds: 400));
                   try { await gameCtrl.loadGame(gid); } catch (_) {}
                 }
-                if (!mounted) return;
-                if (!ready && (gameCtrl.game == null || gameCtrl.game!.players.isEmpty)) {
-                  // If still not ready, inform user and continue watching
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Esperando a que se sincronicen los jugadores...')));
+                  if (!mounted) return;
+                  if (!ready && (gameCtrl.game == null || gameCtrl.game!.players.isEmpty)) {
+                    // If still not ready, inform user and continue watching
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Esperando a que se sincronicen los jugadores...')));
+                    return;
+                  }
+                  try { developer.log('Watcher navigating to game ${gameCtrl.game?.id} after finding game by id', name: 'WaitingRoomPage'); } catch (_) {}
+                  _roomWatcherTimer?.cancel();
+                  Navigator.pushReplacementNamed(context, '/game/${gameCtrl.game!.id}');
                   return;
-                }
-                _roomWatcherTimer?.cancel();
-                Navigator.pushReplacementNamed(context, '/game/${gameCtrl.game!.id}');
-                return;
               }
             }
             if (refreshed.status != null && refreshed.status!.toLowerCase().contains('ingame')) {
               final found = await gameCtrl.loadGameByRoom(widget.roomId);
-              if (found && gameCtrl.game != null) {
+                if (found && gameCtrl.game != null) {
+                  try { developer.log('Watcher loaded game by room; navigating to ${gameCtrl.game?.id}', name: 'WaitingRoomPage'); } catch (_) {}
                 bool ready = false;
                 for (int attempt = 0; attempt < 5; attempt++) {
                   if (gameCtrl.game != null && gameCtrl.game!.players.isNotEmpty) { ready = true; break; }
                   await Future.delayed(const Duration(milliseconds: 400));
                   try { await gameCtrl.loadGameByRoom(widget.roomId); } catch (_) {}
                 }
-                if (!mounted) return;
-                if (!ready && (gameCtrl.game == null || gameCtrl.game!.players.isEmpty)) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Esperando a que se sincronicen los jugadores...')));
+                  if (!mounted) return;
+                  if (!ready && (gameCtrl.game == null || gameCtrl.game!.players.isEmpty)) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Esperando a que se sincronicen los jugadores...')));
+                    return;
+                  }
+                  try { developer.log('Watcher navigating to game ${gameCtrl.game?.id} after loading by room', name: 'WaitingRoomPage'); } catch (_) {}
+                  _roomWatcherTimer?.cancel();
+                  Navigator.pushReplacementNamed(context, '/game/${gameCtrl.game!.id}');
                   return;
-                }
-                _roomWatcherTimer?.cancel();
-                Navigator.pushReplacementNamed(context, '/game/${gameCtrl.game!.id}');
-                return;
               }
             }
           }
           // Final attempt: probe the game endpoint directly by room id
-          final found = await gameCtrl.loadGameByRoom(widget.roomId);
-          if (found && gameCtrl.game != null) {
-            if (!mounted) return;
-            _roomWatcherTimer?.cancel();
-            Navigator.pushReplacementNamed(context, '/game/${gameCtrl.game!.id}');
-            return;
-          }
+            final found = await gameCtrl.loadGameByRoom(widget.roomId);
+            if (found && gameCtrl.game != null) {
+              try { developer.log('Watcher final probe found game ${gameCtrl.game?.id}; navigating', name: 'WaitingRoomPage'); } catch (_) {}
+              if (!mounted) return;
+              _roomWatcherTimer?.cancel();
+              Navigator.pushReplacementNamed(context, '/game/${gameCtrl.game!.id}');
+              return;
+            }
         } catch (e) {
           // keep watching; log for debugging
           try { final s = e.toString();  print('WaitingRoom watcher error: $s'); } catch (_) {}

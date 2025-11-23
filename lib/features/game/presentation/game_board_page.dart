@@ -393,8 +393,34 @@ class _GameBoardPageState extends State<GameBoardPage> with TickerProviderStateM
                       const SizedBox(height: 12),
                       // If the controller's currentQuestion is null we are waiting for the professor
                       Builder(builder: (innerCtx) {
-                        final c = Provider.of<GameController>(innerCtx, listen: false);
-                        if (c.currentQuestion == null && _specialMessage!.contains('Profesor')) {
+                        final c = Provider.of<GameController>(innerCtx);
+                        // If we have a currentQuestion, show it with options inline
+                        if (c.currentQuestion != null) {
+                          final q = c.currentQuestion!;
+                          return Column(mainAxisSize: MainAxisSize.min, children: [
+                            Text(q.question, style: const TextStyle(color: Colors.white, fontSize: 16)),
+                            const SizedBox(height: 12),
+                            ...q.options.map((opt) => Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                  child: ElevatedButton(
+                                    onPressed: c.answering
+                                        ? null
+                                        : () async {
+                                            try {
+                                              // capture and then clear the dialog state
+                                              await c.answerProfesor(q.questionId, opt);
+                                              c.currentQuestion = null;
+                                            } catch (_) {}
+                                          },
+                                    child: c.answering
+                                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                                        : Text(opt),
+                                  ),
+                                )),
+                          ]);
+                        }
+
+                        if (_specialMessage != null && _specialMessage!.contains('Profesor')) {
                           return const SizedBox(width: 36, height: 36, child: CircularProgressIndicator(strokeWidth: 3));
                         }
                         return const Icon(Icons.info, color: Colors.white70, size: 36);
