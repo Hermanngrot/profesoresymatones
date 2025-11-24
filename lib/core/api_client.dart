@@ -9,6 +9,10 @@ import 'dart:developer' as developer;
 class ApiClient {
   final String baseUrl;
 
+  // Store last request/response summary for diagnostics (useful in web builds)
+  static String? lastRequestSummary;
+  static String? lastResponseSummary;
+
   ApiClient({String? baseUrl}) : baseUrl = baseUrl ?? apiBaseUrl;
 
   Future<dynamic> getJson(String path) async {
@@ -16,8 +20,10 @@ class ApiClient {
     final headers = await _buildHeaders();
     developer.log('HTTP GET: $uri', name: 'ApiClient');
     developer.log('Request headers: ${headers.toString()}', name: 'ApiClient');
+    lastRequestSummary = 'GET $uri headers=${headers.toString()}';
     final resp = await http.get(uri, headers: headers);
     developer.log('Response ${resp.statusCode}: ${resp.body}', name: 'ApiClient');
+    lastResponseSummary = 'Status ${resp.statusCode} body=${resp.body}';
     return _handleResponse(resp);
   }
 
@@ -27,8 +33,10 @@ class ApiClient {
     developer.log('HTTP POST: $uri', name: 'ApiClient');
     developer.log('Request headers: ${headers.toString()}', name: 'ApiClient');
     developer.log('Request body: ${jsonEncode(body)}', name: 'ApiClient');
+    lastRequestSummary = 'POST $uri headers=${headers.toString()} body=${jsonEncode(body)}';
     final resp = await http.post(uri, headers: headers, body: jsonEncode(body));
     developer.log('Response ${resp.statusCode}: ${resp.body}', name: 'ApiClient');
+    lastResponseSummary = 'Status ${resp.statusCode} body=${resp.body}';
     return _handleResponse(resp);
   }
 
@@ -43,6 +51,7 @@ class ApiClient {
   dynamic _handleResponse(http.Response resp) {
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       developer.log('HTTP ERROR ${resp.statusCode}: ${resp.body}', name: 'ApiClient');
+      lastResponseSummary = 'ERROR ${resp.statusCode} body=${resp.body}';
       throw Exception('HTTP ${resp.statusCode}: ${resp.body}');
     }
     if (resp.body.isEmpty) return {};

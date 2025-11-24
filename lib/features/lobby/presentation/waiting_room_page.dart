@@ -27,9 +27,10 @@ class _WaitingRoomPageState extends State<WaitingRoomPage> {
     final ctrl = Provider.of<LobbyController>(context, listen: false);
     // load initial room info
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final gameCtrl = Provider.of<GameController>(context, listen: false);
-      final r = await ctrl.getRoomById(widget.roomId);
-      try { developer.log('WaitingRoom init for room=${widget.roomId} fetchedRoom=${r?.toString() ?? '<null>'}', name: 'WaitingRoomPage'); } catch (_) {}
+      try {
+        final gameCtrl = Provider.of<GameController>(context, listen: false);
+        final r = await ctrl.getRoomById(widget.roomId);
+        try { developer.log('WaitingRoom init for room=${widget.roomId} fetchedRoom=${r?.toString() ?? '<null>'}', name: 'WaitingRoomPage'); } catch (_) {}
 
       // If the room is already in-game, attempt to enter the active game directly
       try {
@@ -145,6 +146,12 @@ class _WaitingRoomPageState extends State<WaitingRoomPage> {
         }
       });
 
+      } catch (e, st) {
+        try { developer.log('WaitingRoom init error: ${e.toString()}\n$st', name: 'WaitingRoomPage'); } catch (_) {}
+        if (mounted) {
+          try { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('WaitingRoom init error: ${e.toString()}'))); } catch (_) {}
+        }
+      }
       await _ensureJoinedIfNeeded();
     });
   }
@@ -320,6 +327,26 @@ class _WaitingRoomPageState extends State<WaitingRoomPage> {
                                         if (!mounted) return;
                                         showDialog(context: context, builder: (_) => AlertDialog(title: const Text('Room JSON'), content: SingleChildScrollView(child: Text(pretty)), actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close'))]));
                                       } catch (e) {
+                                  OutlinedButton.icon(
+                                    icon: const Icon(Icons.bug_report),
+                                    label: const Text('Show Diagnostics'),
+                                    onPressed: () async {
+                                      try {
+                                        final gameCtrl = Provider.of<GameController>(context, listen: false);
+                                        final details = StringBuffer();
+                                        details.writeln('gameCtrl.error: ${gameCtrl.error}');
+                                        details.writeln('lobby.error: ${lobby.error}');
+                                        details.writeln('lastSignalRError: ${gameCtrl.lastSignalRError}');
+                                        details.writeln('ApiClient.lastRequestSummary: ${ApiClient.lastRequestSummary}');
+                                        details.writeln('ApiClient.lastResponseSummary: ${ApiClient.lastResponseSummary}');
+                                        if (!mounted) return;
+                                        showDialog(context: context, builder: (_) => AlertDialog(title: const Text('Diagnostics'), content: SingleChildScrollView(child: Text(details.toString())), actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close'))]));
+                                      } catch (e) {
+                                        if (!mounted) return;
+                                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Diagnostics failed: ${e.toString()}')));
+                                      }
+                                    },
+                                  );
                                         if (!mounted) return;
                                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error fetching raw JSON: ${e.toString()}')));
                                       }
