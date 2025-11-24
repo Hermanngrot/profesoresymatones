@@ -461,6 +461,40 @@ class _WaitingRoomPageState extends State<WaitingRoomPage> {
                             onPressed: (!canStart || !isOwner)
                                 ? null
                                 : () async {
+                                    // Ensure AuthController finished loading (token present)
+                                    final auth = Provider.of<AuthController>(context, listen: false);
+                                    int waitAuth = 0;
+                                    while (!auth.isLoggedIn && waitAuth < 15) {
+                                      await Future.delayed(const Duration(milliseconds: 200));
+                                      waitAuth++;
+                                    }
+                                    // Ensure local user is joined in the lobby before creating the game
+                                    final prefs = Provider.of<AuthController>(context, listen: false);
+                                    final localName = prefs.username ?? '';
+                                    bool inRoom = false;
+                                    try {
+                                      final tryRoom = await lobby.getRoomById(widget.roomId);
+                                      if (tryRoom != null) {
+                                        inRoom = tryRoom.playerNames.map((s) => s.trim().toLowerCase()).contains(localName.trim().toLowerCase());
+                                      }
+                                    } catch (_) {}
+                                    if (!inRoom) {
+                                      // Try to join up to a few times before starting
+                                      for (int attempt = 0; attempt < 6 && !inRoom; attempt++) {
+                                        try {
+                                          await lobby.joinRoom(widget.roomId);
+                                        } catch (_) {}
+                                        try {
+                                          final refreshed = await lobby.getRoomById(widget.roomId);
+                                          if (refreshed != null) {
+                                            inRoom = refreshed.playerNames.map((s) => s.trim().toLowerCase()).contains(localName.trim().toLowerCase());
+                                          }
+                                        } catch (_) {}
+                                        if (inRoom) break;
+                                        await Future.delayed(const Duration(milliseconds: 400));
+                                      }
+                                    }
+
                                     // refresh before starting
                                     final r = await lobby.getRoomById(widget.roomId);
                                     if (r == null || (r.players < 2)) {
